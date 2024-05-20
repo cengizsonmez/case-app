@@ -1,9 +1,10 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
   DetailModal,
   Grid,
+  Pagination,
   SearchSection,
   TotalBookingsCounter,
 } from "./components";
@@ -12,49 +13,81 @@ import { IBike } from "./types";
 const API_URL = process.env.REACT_APP_API_URL || "";
 
 const App: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const bike_id = searchParams.get("bike_id") || "";
+  const vehicle_type = searchParams.get("vehicle_type") || "";
+  const page = parseInt(searchParams.get("page") || "1");
+
   const [bikes, setBikes] = useState<IBike[]>([]);
-  const [filteredBikes, setFilteredBikes] = useState<IBike[]>([]);
-  const [filter, setFilter] = useState<string>("");
-  const [search, setSearch] = useState<string>("");
   const [totalBookings, setTotalBookings] = useState<number>(0);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [selectedBike, setSelectedBike] = useState<IBike>();
-  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   const [ttl, setTtl] = useState<number>(0);
-  const [refreshCountdown, setRefreshCountdown] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
-  const prevRefreshCountdown = useRef<number | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPageCount, setTotalPageCount] = useState<number>(0);
+  const [hasNextPage, setHasNextPage] = useState<boolean>(false);
+  const [refreshCountdown, setRefreshCountdown] = useState<number>(0);
 
-  const fetchData = async () => {
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (ttl > 0) {
+      setRefreshCountdown(ttl);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(() => {
+        setRefreshCountdown((prevCountdown) =>
+          prevCountdown ? prevCountdown - 1 : 0
+        );
+      }, 1000);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [ttl]);
+
+  useEffect(() => {
+    if (refreshCountdown === 0) {
+      fetchData(
+        searchParams.get("bike_id"),
+        searchParams.get("vehicle_type"),
+        searchParams.get("page"),
+      );
+    }
+  }, [refreshCountdown]);
+
+  const fetchData = async (
+    bikeId: string | null,
+    vehicleType: string | null,
+    page: string | null,
+  ) => {
     try {
       setLoading(true);
-      const response = await axios.get(API_URL);
-      const { data, ttl } = response.data;
-      data.bikes = data.bikes.filter(
-        (bike: IBike) => bike !== null && Object.keys(bike).length > 0
-      );
-      setBikes(data.bikes);
-      if (filter || search) {
-        filterBikes(data.bikes);
-      } else {
-        setFilteredBikes(data.bikes);
-      }
-      const types: string[] = data.bikes
-        .filter((bike: IBike) => bike.vehicle_type)
-        .map((bike: IBike) => bike.vehicle_type);
-      const uniqueTypes: string[] = Array.from(new Set(types));
-      setVehicleTypes(uniqueTypes);
+      const response = await axios.get(API_URL, {
+        params: {
+          page,
+          bike_id: bikeId,
+          vehicle_type: vehicleType,
+        },
+      });
+      const { data, ttl, total_count, nextPage } = response.data;
+      setBikes(data.bike ? [data.bike] : data.bikes);
+      setHasNextPage(nextPage);
+      setTotalPageCount(Math.round(total_count / 10));
       setTtl(ttl);
     } catch (error) {
       console.error("Error fetching data:", error);
-      fetchData();
+      fetchData(
+        searchParams.get("bike_id"),
+        searchParams.get("vehicle_type"),
+        searchParams.get("page")
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const calculateTotalBookings = (bikesList: IBike[]) => {
-    const total = bikesList.reduce((acc, bike) => {
+    const total = bikesList?.reduce((acc, bike) => {
       if (bike && bike.total_bookings) {
         return acc + Number(bike.total_bookings);
       } else {
@@ -64,54 +97,37 @@ const App: React.FC = () => {
     setTotalBookings(total);
   };
 
-  const filterBikes = (bikes: IBike[]) => {
-    let filtered = bikes;
-    if (filter) {
-      filtered = bikes.filter(
-        (bike) => bike.vehicle_type && bike.vehicle_type.includes(filter)
-      );
-    }
-    if (search) {
-      filtered = filtered.filter((bike) =>
-        bike.bike_id.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-    setFilteredBikes(filtered);
-  };
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    fetchData(
+      searchParams.get("bike_id"),
+      searchParams.get("vehicle_type"),
+      searchParams.get("page")
+    );
+  }, [searchParams]);
 
   useEffect(() => {
-    if (ttl > 0) {
-      setRefreshCountdown(ttl);
-      const interval = setInterval(() => {
-        prevRefreshCountdown.current = refreshCountdown;
-        setRefreshCountdown((prevCountdown) =>
-          prevCountdown ? prevCountdown - 1 : 0
-        );
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [ttl]);
-
-  useEffect(() => {
-    if (refreshCountdown === 0) {
-      fetchData();
-    }
-  }, [refreshCountdown]);
-
-  useEffect(() => {
-    filterBikes(bikes);
-  }, [filter, search]);
-
-  useEffect(() => {
-    calculateTotalBookings(filteredBikes);
-  }, [filteredBikes]);
+    calculateTotalBookings(bikes);
+  }, [bikes]);
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setFilter(e.target.value);
+    const { value } = e.target;
+    setSearchParams({
+      bike_id: "",
+      vehicle_type: value,
+      page: String(currentPage),
+    });
+    setCurrentPage(1);
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
+    const { value } = e.target;
+    setSearchParams({
+      bike_id: value,
+      vehicle_type: "",
+      page: String(currentPage),
+    });
+    setCurrentPage(1);
   };
 
   const handleDetailsClick = async (bikeId: string) => {
@@ -126,16 +142,36 @@ const App: React.FC = () => {
     setModalOpen(false);
   };
 
+  const handleNextPage = () => {
+    const currentPage = page + 1;
+    setSearchParams({
+      bike_id,
+      vehicle_type,
+      page: String(currentPage),
+      pageDirection: "next",
+    });
+  };
+
+  const handlePrevPage = () => {
+    const currentPage = page ? Number(page) - 1 : "";
+    setSearchParams({
+      bike_id,
+      vehicle_type,
+      page: String(currentPage),
+      pageDirection: "prev",
+    });
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Bikes List</h1>
       <div className="flex justify-between mb-4">
         <SearchSection
-          filter={filter}
+          filter={vehicle_type}
+          search={bike_id}
+          loading={loading}
           handleFilterChange={handleFilterChange}
-          search={search}
           handleSearchChange={handleSearchChange}
-          vehicleTypes={vehicleTypes}
         />
         <TotalBookingsCounter
           totalBookings={totalBookings}
@@ -147,8 +183,20 @@ const App: React.FC = () => {
           <p>Loading...</p>
         </div>
       ) : (
-        <Grid bikes={filteredBikes} handleDetailsClick={handleDetailsClick} />
+        <>
+          <Grid bikes={bikes} handleDetailsClick={handleDetailsClick} />
+          {hasNextPage !== undefined && (
+            <Pagination
+              handlePrevPage={handlePrevPage}
+              handleNextPage={handleNextPage}
+              currentPage={page}
+              totalPageCount={totalPageCount}
+              hasNextPage={hasNextPage}
+            />
+          )}
+        </>
       )}
+
       {selectedBike && modalOpen && (
         <DetailModal
           isOpen={modalOpen}

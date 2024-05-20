@@ -5,10 +5,13 @@ interface IInfoBoxProps {
   refreshCountdown: number;
 }
 
-export const TotalBookingsCounter: React.FC<IInfoBoxProps> = ({ totalBookings, refreshCountdown }) => {
+export const TotalBookingsCounter: React.FC<IInfoBoxProps> = ({
+  totalBookings,
+  refreshCountdown,
+}) => {
   return (
     <div>
-    <p>Will refresh in: {refreshCountdown} seconds</p>
+      <p>Will refresh in: {refreshCountdown} seconds</p>
       <p>Total Bookings of Listed Bikes: {totalBookings}</p>
     </div>
   );

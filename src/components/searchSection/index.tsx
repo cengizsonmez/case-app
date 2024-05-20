@@ -1,31 +1,44 @@
 import React from "react";
-import { capitalizeFirstLetter } from "../../utils/commanUtils";
 
 interface ISearchSectionProps {
   filter: string;
-  handleFilterChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   search: string;
+  loading: boolean;
+  handleFilterChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   handleSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  vehicleTypes: string[];
 }
 
 export const SearchSection: React.FC<ISearchSectionProps> = ({
   filter,
-  handleFilterChange,
   search,
+  loading,
+  handleFilterChange,
   handleSearchChange,
-  vehicleTypes,
 }) => {
   return (
     <div className="mb-4">
       <label className="mr-2">Search by ID:</label>
-      <input type="text" value={search} onChange={handleSearchChange} className="border p-2" data-testid="search-input"/>
+      <input
+        type="text"
+        value={search}
+        onChange={handleSearchChange}
+        className={`border p-2 ${
+          loading && "cursor-not-allowed"
+        }`}
+        disabled={loading}
+      />
       <label className="ml-4 mr-2">Filter by Type:</label>
-      <select value={filter} onChange={handleFilterChange} className="border p-2" data-testid="filter-select">
+      <select
+        value={filter}
+        onChange={handleFilterChange}
+        className={`border p-2 ${
+          loading && "cursor-not-allowed"
+        }`}
+        disabled={loading}
+      >
         <option value="">All</option>
-        {vehicleTypes.map((type) => (
-          <option key={type} value={type}>{capitalizeFirstLetter(type)}</option>
-        ))}
+        <option value="scooter">Scooter</option>
+        <option value="bike">Bike</option>
       </select>
     </div>
   );
