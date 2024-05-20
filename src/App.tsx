@@ -149,7 +149,6 @@ const App: React.FC = () => {
       bike_id,
       vehicle_type,
       page: String(currentPage),
-      pageDirection: "next",
     });
   };
 
@@ -159,7 +158,6 @@ const App: React.FC = () => {
       bike_id,
       vehicle_type,
       page: String(currentPage),
-      pageDirection: "prev",
     });
   };
 
